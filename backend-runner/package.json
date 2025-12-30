@@ -1,0 +1,14 @@
+{
+  "name": "code-runner",
+  "version": "1.0.0",
+  "description": "Secure Docker-based PTY runner",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "uuid": "^9.0.1",
+    "ws": "^8.16.0"
+  }
+}
