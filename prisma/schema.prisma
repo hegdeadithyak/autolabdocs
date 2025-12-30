@@ -1,0 +1,59 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  password  String
+  projects  Project[]
+}
+
+model Project {
+  id              String       @id @default(cuid())
+  name            String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  notebookContent Json?
+  userId          String?
+  type            ProjectType
+  language        IdeLanguage?
+  user            User?        @relation(fields: [userId], references: [id])
+  files           IdeFile[]
+}
+
+model IdeFile {
+  id          String   @id @default(cuid())
+  name        String
+  content     String   @db.Text
+  isExecuted  Boolean  @default(false)
+  lastInput   String?  @db.Text
+  lastOutput  String?  @db.Text
+  lastError   String?  @db.Text
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+}
+
+enum ProjectType {
+  COLAB
+  IDE
+}
+
+enum IdeLanguage {
+  C
+  CPP
+  PYTHON
+}
