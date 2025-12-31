@@ -50,6 +50,9 @@ jobs:
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
           
+          # Ensure firewall allows 8080
+          sudo ufw allow 8080/tcp || true
+
           # Stop and remove existing container
           docker stop backend-runner || true
           docker rm backend-runner || true

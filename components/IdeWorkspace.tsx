@@ -188,7 +188,11 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
 
     // delay fit a little to stabilize layout
     setTimeout(() => {
-      try { fit.fit(); } catch { /* ignore if hidden */ }
+      try { 
+        if (term.element?.offsetParent) {
+            fit.fit(); 
+        }
+      } catch { /* ignore */ }
     }, 120);
 
     // initial prompt
@@ -204,7 +208,7 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
 
     // Resize observer to re-fit terminal when container changes
     const ro = new ResizeObserver(() => {
-      if (fit && terminalRef.current?.offsetParent) {
+      if (fit && terminalRef.current?.offsetParent && term.element?.offsetParent) {
         try { fit.fit(); } catch { /* ignore */ }
       }
     });
@@ -404,7 +408,8 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
       termInstance.current.writeln(`\x1b[32m➜\x1b[0m \x1b[34m~/project\x1b[0m $ ${cmd}`);
     }
 
-    const ws = new WebSocket('ws://localhost:8080');
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'ws://43.204.144.134:8080';
+    const ws = new WebSocket(backendUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
