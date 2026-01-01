@@ -76,36 +76,88 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         // Determine run command based on extension
         const ext = path.extname(filename).toLowerCase();
         let runCommand;
+        let dockerArgs;
         
         if (ext === '.py') {
-            runCommand = ['python3', '-u', `/home/runner/${filename}`];
+            runCommand = ['python3', '-u', `/code/${filename}`];
+            dockerArgs = [
+                'run',
+                '--rm',
+                '-i',
+                '--name', `runner-${sessionId}`,
+                '--network', 'none',
+                '--cpus', '0.5',
+                '--memory', '256m',
+                '--pids-limit', '64',
+                '--user', '1000:1000',
+                '-v', `${filePath}:/code/${filename}:ro`,
+                '-w', '/code',
+                RUNTIME_IMAGE,
+                ...runCommand
+            ];
         } else if (ext === '.js') {
-            runCommand = ['node', `/home/runner/${filename}`];
-        } else if (ext === '.cpp') {
-            runCommand = ['sh', '-c', `g++ /home/runner/${filename} -o /home/runner/a.out && /home/runner/a.out`];
+            runCommand = ['node', `/code/${filename}`];
+            dockerArgs = [
+                'run',
+                '--rm',
+                '-i',
+                '--name', `runner-${sessionId}`,
+                '--network', 'none',
+                '--cpus', '0.5',
+                '--memory', '256m',
+                '--pids-limit', '64',
+                '--user', '1000:1000',
+                '-v', `${filePath}:/code/${filename}:ro`,
+                '-w', '/code',
+                RUNTIME_IMAGE,
+                ...runCommand
+            ];
+        } else if (ext === '.cpp' || ext === '.c') {
+            // For C/C++, we need a writable workspace for compilation
+            // Mount the entire session directory to allow compilation output
+            const compiler = ext === '.cpp' ? 'g++' : 'gcc';
+            runCommand = ['sh', '-c', `${compiler} /code/${filename} -o /tmp/a.out && /tmp/a.out`];
+            
+            dockerArgs = [
+                'run',
+                '--rm',
+                '-i',
+                '--name', `runner-${sessionId}`,
+                '--network', 'none',
+                '--cpus', '0.5',
+                '--memory', '256m',
+                '--pids-limit', '64',
+                '--user', '1000:1000',
+                '-v', `${filePath}:/code/${filename}:ro`,
+                '-w', '/code',
+                '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',  // Writable tmpfs for compilation output
+                RUNTIME_IMAGE,
+                'sh', '-c', runCommand[2]
+            ];
         } else {
-            runCommand = ['cat', `/home/runner/${filename}`];
+            // Default: just cat the file
+            runCommand = ['cat', `/code/${filename}`];
+            dockerArgs = [
+                'run',
+                '--rm',
+                '-i',
+                '--name', `runner-${sessionId}`,
+                '--network', 'none',
+                '--cpus', '0.5',
+                '--memory', '256m',
+                '--pids-limit', '64',
+                '--user', '1000:1000',
+                '-v', `${filePath}:/code/${filename}:ro`,
+                '-w', '/code',
+                RUNTIME_IMAGE,
+                ...runCommand
+            ];
         }
 
-        // 2. Spawn Docker via PTY
+        console.log(`[${sessionId}] Starting Docker container for ${filename}`);
+        console.log(`[${sessionId}] Command:`, dockerArgs.join(' '));
+
         const cmd = 'docker';
-        const dockerArgs = [
-            'run',
-            '--rm',
-            '-i',
-            '--name', `runner-${sessionId}`,
-            '--network', 'none',
-            '--cpus', '0.5',
-            '--memory', '256m',
-            '--pids-limit', '64',
-            '--user', '1000:1000',
-            '-v', `${filePath}:/home/runner/${filename}:ro`,
-            RUNTIME_IMAGE,
-            ...runCommand
-        ];
-
-        console.log(`[${sessionId}] Starting Docker container:`, dockerArgs.join(' '));
-
         const ptyProcess = pty.spawn(cmd, dockerArgs, {
             name: 'xterm-color',
             cols: 80,
