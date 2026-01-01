@@ -408,7 +408,7 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
       termInstance.current.writeln(`\x1b[32m➜\x1b[0m \x1b[34m~/project\x1b[0m $ ${cmd}`);
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'ws://0.0.0.0:8080';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'ws://ec2-13-203-158-119.ap-south-1.compute.amazonaws.com:8080';
     const ws = new WebSocket(backendUrl);
     wsRef.current = ws;
 

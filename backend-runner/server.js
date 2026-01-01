@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
 const RUNTIME_IMAGE = 'python-runner:latest';
-const TEMP_DIR = path.join(os.tmpdir(), 'code-runner');
+const TEMP_DIR = path.join(os.tmpdir(), 'runner');
 
 // Ensure temp dir exists
 if (!fs.existsSync(TEMP_DIR)) {
@@ -116,8 +116,7 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
             // For C/C++, we need a writable workspace for compilation
             // Mount the entire session directory to allow compilation output
             const compiler = ext === '.cpp' ? 'g++' : 'gcc';
-            runCommand = ['sh', '-c', `${compiler} /code/${filename} -o /tmp/a.out && /tmp/a.out`];
-            
+            runCommand = ['sh', '-c', `g++ /home/runner/${filename} -o /home/runner/a.out && /home/runner/a.out`];
             dockerArgs = [
                 'run',
                 '--rm',
