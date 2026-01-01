@@ -48,18 +48,33 @@ jobs:
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
           
-          # Ensure firewall allows 8080
+          # Tag python-runner so the server can find it
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest python-runner:latest
+          
+          # Configure firewall
           sudo ufw allow 8080/tcp || true
-
+          
           # Stop and remove existing container
-          docker stop backend-runner || true
-          docker rm backend-runner || true
+          docker stop backend-runner 2>/dev/null || true
+          docker rm backend-runner 2>/dev/null || true
           
           # Run the new container
-          # We mount /var/run/docker.sock so the container can spawn sibling containers
           docker run -d \
             --name backend-runner \
             --restart unless-stopped \
             -p 8080:8080 \
             -v /var/run/docker.sock:/var/run/docker.sock \
             ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
+          
+          # Wait for container to start
+          sleep 5
+          
+          # Show status
+          echo "=== Container Status ==="
+          docker ps | grep backend-runner
+          
+          echo "=== Container Logs ==="
+          docker logs backend-runner
+          
+          echo "=== Port Check ==="
+          sudo ss -tulpn | grep 8080 || sudo netstat -tulpn | grep 8080
