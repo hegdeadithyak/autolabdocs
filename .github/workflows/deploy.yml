@@ -34,7 +34,9 @@ jobs:
         context: ./backend-runner
         file: ./backend-runner/Dockerfile.server
         push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:${{ github.sha }}
 
     # 3. Deploy to AWS EC2
     - name: Deploy to EC2
@@ -55,10 +57,10 @@ jobs:
           
           # Pull the latest images
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:${{ github.sha }}
           
           echo "New Backend Image ID:"
-          docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest --format '{{.Id}}'
+          docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:${{ github.sha }} --format '{{.Id}}'
           
           # Tag python-runner so the server can find it
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest python-runner:latest
@@ -76,7 +78,7 @@ jobs:
             --restart unless-stopped \
             -p 8080:8080 \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:${{ github.sha }}
           
           # Wait for container to start
           sleep 5
