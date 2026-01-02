@@ -9,6 +9,27 @@ const { spawnSync, exec } = require('child_process');
 // Force deploy trigger
 const wss = new WebSocket.Server({ port: 8080 });
 
+// Diagnostic: Check Docker availability
+try {
+    console.log('--- Startup Diagnostics ---');
+    const dockerVersion = spawnSync('docker', ['--version']);
+    if (dockerVersion.error) {
+        console.error('Failed to find docker binary:', dockerVersion.error);
+    } else {
+        console.log('Docker binary found:', dockerVersion.stdout.toString().trim());
+    }
+
+    const dockerImages = spawnSync('docker', ['images']);
+    if (dockerImages.error) {
+        console.error('Failed to list images (socket issue?):', dockerImages.error);
+    } else {
+        console.log('Docker images accessible:\n', dockerImages.stdout.toString());
+    }
+    console.log('---------------------------');
+} catch (e) {
+    console.error('Diagnostic check failed:', e);
+}
+
 const RUNTIME_IMAGE = 'python-runner:latest'; // Assumes image is built
 const TEMP_DIR = path.join(os.tmpdir(), 'code-runner');
 
@@ -46,6 +67,9 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         // 1. Setup Host Environment
         fs.mkdirSync(sessionDir, { recursive: true });
         const filePath = path.join(sessionDir, filename);
+        
+        // Ensure parent directory exists (for nested paths like 'src/main.py')
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
         fs.writeFileSync(filePath, code);
 
         // Determine run command based on extension
@@ -53,7 +77,8 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         let runCommand;
         
         if (ext === '.py') {
-            runCommand = ['python3', '-u', `/home/runner/${filename}`];
+            // Debugging: List files to confirm copy success, then run
+            runCommand = ['sh', '-c', `ls -laR /home/runner; python3 -u "/home/runner/${filename}"`];
         } else if (ext === '.js') {
             runCommand = ['node', `/home/runner/${filename}`];
         } else if (ext === '.cpp') {
@@ -130,7 +155,7 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
 
     } catch (err) {
         console.error(`[${sessionId}] Error:`, err);
-        ws.send(JSON.stringify({ type: 'error', data: 'Failed to start execution.' }));
+        ws.send(JSON.stringify({ type: 'error', data: 'Failed to start execution: ' + err.message }));
         ws.close();
         cleanup(sessionId, sessionDir, null); // Ensure cleanup on init failure
     }

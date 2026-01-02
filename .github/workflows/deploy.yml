@@ -44,6 +44,12 @@ jobs:
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
+          echo "=== Environment Debug ==="
+          which docker || echo "Docker not in PATH"
+          ls -la /var/run/docker.sock || echo "Docker socket missing"
+          docker info || echo "Docker daemon not reachable"
+          echo "========================"
+
           # Pull the latest images
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
