@@ -50,9 +50,15 @@ jobs:
           docker info || echo "Docker daemon not reachable"
           echo "========================"
 
+          # Force remove old image to ensure fresh pull
+          docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest || true
+          
           # Pull the latest images
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest
+          
+          echo "New Backend Image ID:"
+          docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest --format '{{.Id}}'
           
           # Tag python-runner so the server can find it
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest python-runner:latest

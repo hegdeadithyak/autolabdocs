@@ -12,6 +12,7 @@ const wss = new WebSocket.Server({ port: 8080 });
 // Diagnostic: Check Docker availability
 try {
     console.log('--- Startup Diagnostics ---');
+    console.log('VERSION: 2026-01-02-FIX-PATHS-V2');
     const dockerVersion = spawnSync('docker', ['--version']);
     if (dockerVersion.error) {
         console.error('Failed to find docker binary:', dockerVersion.error);
