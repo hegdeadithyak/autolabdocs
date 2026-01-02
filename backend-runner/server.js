@@ -78,16 +78,16 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         
         if (ext === '.py') {
             // Debugging: List files to confirm copy success, then run
-            runCommand = ['sh', '-c', `ls -laR /home/runner; python3 -u "/home/runner/${filename}"`];
+            runCommand = ['sh', '-c', `ls -laR /code; python3 -u "/code/${filename}"`];
         } else if (ext === '.js') {
-            runCommand = ['node', `/home/runner/${filename}`];
+            runCommand = ['node', `/code/${filename}`];
         } else if (ext === '.cpp') {
             // For C++, we compile then run. We need a shell for this.
-            // We'll write a simple runner script or use sh -c
-            runCommand = ['sh', '-c', `g++ /home/runner/${filename} -o /home/runner/a.out && /home/runner/a.out`];
+            // Added ls -la for debugging "No such file" errors
+            runCommand = ['sh', '-c', `ls -la /code && g++ /code/${filename} -o /code/a.out && /code/a.out`];
         } else {
             // Default or plaintext
-             runCommand = ['cat', `/home/runner/${filename}`];
+             runCommand = ['cat', `/code/${filename}`];
         }
 
         // 2. Prepare Container (Create -> Copy -> Start)
@@ -115,7 +115,7 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
 
         // Copy code into container
         // Note: filePath is the local path, destination is inside container
-        const cpResult = spawnSync('docker', ['cp', filePath, `runner-${sessionId}:/home/runner/${filename}`]);
+        const cpResult = spawnSync('docker', ['cp', filePath, `runner-${sessionId}:/code/${filename}`]);
         if (cpResult.error || cpResult.status !== 0) {
             throw new Error(`Failed to copy code to container: ${cpResult.stderr?.toString() || cpResult.error}`);
         }
