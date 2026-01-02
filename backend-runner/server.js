@@ -1,68 +1,43 @@
 const WebSocket = require('ws');
-const http = require('http');
 const pty = require('node-pty');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
+const { spawnSync, exec } = require('child_process');
 
-const RUNTIME_IMAGE = 'python-runner:latest';
-const TEMP_DIR = path.join(os.tmpdir(), 'runner');
+// Force deploy trigger
+const wss = new WebSocket.Server({ port: 8080 });
+
+const RUNTIME_IMAGE = 'python-runner:latest'; // Assumes image is built
+const TEMP_DIR = path.join(os.tmpdir(), 'code-runner');
 
 // Ensure temp dir exists
 if (!fs.existsSync(TEMP_DIR)) {
     fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-// Create HTTP server for health checks
-const server = http.createServer((req, res) => {
-    if (req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-            status: 'ok', 
-            timestamp: new Date().toISOString(),
-            connections: wss.clients.size 
-        }));
-    } else {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
-    }
-});
-
-// Attach WebSocket server to HTTP server
-const wss = new WebSocket.Server({ server });
-
 wss.on('connection', (ws) => {
     const sessionId = uuidv4();
     const sessionDir = path.join(TEMP_DIR, sessionId);
     let ptyProcess = null;
 
-    console.log(`[${sessionId}] Client connected. Total clients: ${wss.clients.size}`);
+    console.log(`[${sessionId}] Connected`);
 
     ws.on('message', async (message) => {
-        try {
-            const data = JSON.parse(message);
+        const data = JSON.parse(message);
 
-            if (data.type === 'init') {
-                ptyProcess = await handleInit(ws, sessionId, sessionDir, data.code, data.filename);
-            } else if (data.type === 'input' && ptyProcess) {
-                ptyProcess.write(data.data);
-            } else if (data.type === 'resize' && ptyProcess) {
-                ptyProcess.resize(data.cols, data.rows);
-            }
-        } catch (err) {
-            console.error(`[${sessionId}] Message error:`, err);
-            ws.send(JSON.stringify({ type: 'error', data: 'Invalid message format' }));
+        if (data.type === 'init') {
+            ptyProcess = await handleInit(ws, sessionId, sessionDir, data.code, data.filename);
+        } else if (data.type === 'input' && ptyProcess) {
+            ptyProcess.write(data.data);
+        } else if (data.type === 'resize' && ptyProcess) {
+            ptyProcess.resize(data.cols, data.rows);
         }
     });
 
     ws.on('close', () => {
-        console.log(`[${sessionId}] Client disconnected. Total clients: ${wss.clients.size}`);
         cleanup(sessionId, sessionDir, ptyProcess);
-    });
-
-    ws.on('error', (err) => {
-        console.error(`[${sessionId}] WebSocket error:`, err);
     });
 });
 
@@ -76,88 +51,60 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         // Determine run command based on extension
         const ext = path.extname(filename).toLowerCase();
         let runCommand;
-        let dockerArgs;
         
         if (ext === '.py') {
-            runCommand = ['python3', '-u', `/code/${filename}`];
-            dockerArgs = [
-                'run',
-                '--rm',
-                '-i',
-                '--name', `runner-${sessionId}`,
-                '--network', 'none',
-                '--cpus', '0.5',
-                '--memory', '256m',
-                '--pids-limit', '64',
-                '--user', '1000:1000',
-                '-v', `${filePath}:/code/${filename}:ro`,
-                '-w', '/code',
-                RUNTIME_IMAGE,
-                ...runCommand
-            ];
+            runCommand = ['python3', '-u', `/home/runner/${filename}`];
         } else if (ext === '.js') {
-            runCommand = ['node', `/code/${filename}`];
-            dockerArgs = [
-                'run',
-                '--rm',
-                '-i',
-                '--name', `runner-${sessionId}`,
-                '--network', 'none',
-                '--cpus', '0.5',
-                '--memory', '256m',
-                '--pids-limit', '64',
-                '--user', '1000:1000',
-                '-v', `${filePath}:/code/${filename}:ro`,
-                '-w', '/code',
-                RUNTIME_IMAGE,
-                ...runCommand
-            ];
-        } else if (ext === '.cpp' || ext === '.c') {
-            // For C/C++, we need a writable workspace for compilation
-            // Mount the entire session directory to allow compilation output
-            const compiler = ext === '.cpp' ? 'g++' : 'gcc';
+            runCommand = ['node', `/home/runner/${filename}`];
+        } else if (ext === '.cpp') {
+            // For C++, we compile then run. We need a shell for this.
+            // We'll write a simple runner script or use sh -c
             runCommand = ['sh', '-c', `g++ /home/runner/${filename} -o /home/runner/a.out && /home/runner/a.out`];
-            dockerArgs = [
-                'run',
-                '--rm',
-                '-i',
-                '--name', `runner-${sessionId}`,
-                '--network', 'none',
-                '--cpus', '0.5',
-                '--memory', '256m',
-                '--pids-limit', '64',
-                '--user', '1000:1000',
-                '-v', `${filePath}:/code/${filename}:ro`,
-                '-w', '/code',
-                '--tmpfs', '/tmp:rw,noexec,nosuid,size=64m',  // Writable tmpfs for compilation output
-                RUNTIME_IMAGE,
-                'sh', '-c', runCommand[2]
-            ];
         } else {
-            // Default: just cat the file
-            runCommand = ['cat', `/code/${filename}`];
-            dockerArgs = [
-                'run',
-                '--rm',
-                '-i',
-                '--name', `runner-${sessionId}`,
-                '--network', 'none',
-                '--cpus', '0.5',
-                '--memory', '256m',
-                '--pids-limit', '64',
-                '--user', '1000:1000',
-                '-v', `${filePath}:/code/${filename}:ro`,
-                '-w', '/code',
-                RUNTIME_IMAGE,
-                ...runCommand
-            ];
+            // Default or plaintext
+             runCommand = ['cat', `/home/runner/${filename}`];
         }
 
-        console.log(`[${sessionId}] Starting Docker container for ${filename}`);
-        console.log(`[${sessionId}] Command:`, dockerArgs.join(' '));
+        // 2. Prepare Container (Create -> Copy -> Start)
+        // This avoids volume mounting issues in Docker-in-Docker (DooD) scenarios
+        
+        const createArgs = [
+            'create',
+            '-i',                       // Interactive (Keep STDIN open)
+            '--name', `runner-${sessionId}`,
+            '--network', 'none',        // DISABLE NETWORKING
+            '--cpus', '0.5',           // Limit CPU
+            '--memory', '256m',        // Limit RAM
+            '--pids-limit', '64',      // Anti-fork bomb
+            '--user', '1000:1000',      // Non-root user
+            // No volume mount (-v) here. We copy files next.
+            RUNTIME_IMAGE,
+            ...runCommand
+        ];
 
-        const cmd = 'docker';
-        const ptyProcess = pty.spawn(cmd, dockerArgs, {
+        // Create the container
+        const createResult = spawnSync('docker', createArgs);
+        if (createResult.error || createResult.status !== 0) {
+            throw new Error(`Failed to create container: ${createResult.stderr?.toString() || createResult.error}`);
+        }
+
+        // Copy code into container
+        // Note: filePath is the local path, destination is inside container
+        const cpResult = spawnSync('docker', ['cp', filePath, `runner-${sessionId}:/home/runner/${filename}`]);
+        if (cpResult.error || cpResult.status !== 0) {
+            throw new Error(`Failed to copy code to container: ${cpResult.stderr?.toString() || cpResult.error}`);
+        }
+
+        // 3. Spawn Docker Start via PTY
+        // We use 'start -ai' to attach to the existing container created above
+        const startArgs = [
+            'start',
+            '-ai',
+            `runner-${sessionId}`
+        ];
+
+        // pty.spawn handles the pseudo-terminal logic
+        const ptyProcess = pty.spawn('docker', startArgs, {
             name: 'xterm-color',
             cols: 80,
             rows: 24,
@@ -165,7 +112,7 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
             env: process.env
         });
 
-        // 3. Wiring
+        // 4. Wiring
         ptyProcess.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'output', data: data }));
@@ -173,7 +120,6 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         });
 
         ptyProcess.onExit((res) => {
-            console.log(`[${sessionId}] Process exited with code:`, res.exitCode);
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'exit', code: res.exitCode }));
                 ws.close();
@@ -183,25 +129,25 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         return ptyProcess;
 
     } catch (err) {
-        console.error(`[${sessionId}] Init error:`, err);
-        ws.send(JSON.stringify({ type: 'error', data: 'Failed to start execution: ' + err.message }));
+        console.error(`[${sessionId}] Error:`, err);
+        ws.send(JSON.stringify({ type: 'error', data: 'Failed to start execution.' }));
         ws.close();
+        cleanup(sessionId, sessionDir, null); // Ensure cleanup on init failure
     }
 }
 
 function cleanup(sessionId, dir, process) {
     console.log(`[${sessionId}] Cleaning up`);
     
+    // Kill the PTY process (which kills the docker client)
     if (process) {
-        try { 
-            process.kill(); 
-        } catch (e) {
-            console.error(`[${sessionId}] Failed to kill process:`, e.message);
-        }
+        try { process.kill(); } catch (e) {}
     }
 
-    require('child_process').exec(`docker kill runner-${sessionId} 2>/dev/null`, () => {});
+    // Force remove container (kills and removes)
+    exec(`docker rm -f runner-${sessionId}`, () => {});
 
+    // Remove temp files
     try {
         fs.rmSync(dir, { recursive: true, force: true });
     } catch (e) {
@@ -209,21 +155,4 @@ function cleanup(sessionId, dir, process) {
     }
 }
 
-// Start server on all interfaces
-const PORT = process.env.PORT || 8080;
-const HOST = '0.0.0.0';
-
-server.listen(PORT, HOST, () => {
-    console.log(`✓ Runner Service listening on ${HOST}:${PORT}`);
-    console.log(`✓ HTTP health check available at http://${HOST}:${PORT}/health`);
-    console.log(`✓ WebSocket available at ws://${HOST}:${PORT}`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
-});
+console.log('Runner Service listening on port 8080');

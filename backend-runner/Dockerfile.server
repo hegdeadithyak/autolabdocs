@@ -1,7 +1,9 @@
-# Use Node.js as base
+# backend-runner/Dockerfile.server
 FROM node:20-slim
 
-# Install dependencies required for node-pty and Docker CLI
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System deps for node-pty + docker CLI
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
@@ -12,28 +14,29 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Docker CLI (so the app can run 'docker' commands)
+# Install Docker CLI
 RUN mkdir -p /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
-    echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
+    > /etc/apt/sources.list.d/docker.list && \
     apt-get update && \
     apt-get install -y docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# REQUIRED: runner temp dir
+RUN mkdir -p /tmp/runner && chmod 777 /tmp/runner
 
-# Copy package files
-COPY package*.json ./
+WORKDIR /backend-runner
 
-# Install dependencies
-RUN npm install
+# Copy only backend-runner package files
+COPY package.json package-lock.json ./
 
-# Copy source code
-COPY . .
+RUN npm install --production
 
-# Expose the WebSocket port
+# Copy backend-runner source
+COPY server.js ./
+
 EXPOSE 8080
 
 CMD ["node", "server.js"]

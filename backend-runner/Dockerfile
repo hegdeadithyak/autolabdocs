@@ -1,17 +1,31 @@
-FROM python:3.12-alpine
+FROM python:3.12-slim
 
-# Install Node.js and C++ compiler (g++)
-RUN apk add --no-cache nodejs g++ make musl-dev
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Create a non-root user
-RUN adduser -D -h /home/runner -u 1000 runner
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    g++ \
+    gcc \
+    make \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /home/runner
+# Node for JS execution
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
-# Switch to non-root user
+# Non-root user
+RUN useradd -m -u 1000 runner
+
+# 🔑 THIS IS THE FIX
+RUN mkdir -p /code /tmp && \
+    chown -R runner:runner /code /tmp && \
+    chmod 1777 /tmp
+
+WORKDIR /code      # ← MUST match mount target
+
 USER runner
-
-# Entrypoint is not fixed anymore as we might run different commands
-# We'll handle the command in server.js, but we can default to sh or python
 CMD ["sh"]

@@ -50,6 +50,7 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
   const [activeFileId, setActiveFileId] = useState<string>(project.files?.[0]?.id || '');
   const [openFileIds, setOpenFileIds] = useState<string[]>(project.files?.[0] ? [project.files[0].id] : []);
   const [dirtyFileIds, setDirtyFileIds] = useState<Set<string>>(new Set());
+  const [newFileIds, setNewFileIds] = useState<Set<string>>(new Set());
 
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
@@ -101,11 +102,19 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
     if (!fileToSave) return;
 
     try {
-      const isNew = !project.files?.some(f => f.id === targetId);
+      // Check if this file is tracked as new
+      const isNew = newFileIds.has(targetId);
 
       if (isNew) {
-        // persist the entire files array for new projects/file lists
+        // For new files, we must update the whole project to create the relationship
         await api.updateProject({ ...project, files });
+        
+        // Remove from newFileIds since it's now persisted
+        setNewFileIds(prev => {
+            const next = new Set(prev);
+            next.delete(targetId);
+            return next;
+        });
       } else {
         await api.updateFile(targetId, {
           name: fileToSave.name,
@@ -117,6 +126,8 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
         });
       }
 
+      // Update local state to reflect that this file is now "saved" / part of project
+      // Ideally we would refresh from server, but for now we update local tracking
       onProjectUpdate({ ...project, files });
 
       setDirtyFileIds(prev => {
@@ -126,7 +137,6 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
       });
     } catch (err) {
       console.error('Failed to save', err);
-      // preserve existing UX: small alert (you can replace with a toast)
       alert('Failed to save changes!');
     }
   }, [activeFileId, files, project, onProjectUpdate]);
@@ -208,8 +218,11 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
 
     // Resize observer to re-fit terminal when container changes
     const ro = new ResizeObserver(() => {
-      if (fit && terminalRef.current?.offsetParent && term.element?.offsetParent) {
-        try { fit.fit(); } catch { /* ignore */ }
+      // Safety check: ensure terminal instance, addon, and DOM element exist and are visible
+      if (termInstance.current && fitAddon.current && termInstance.current.element?.offsetParent) {
+        try {
+          fitAddon.current.fit();
+        } catch { /* ignore */ }
       }
     });
     ro.observe(terminalRef.current);
@@ -313,6 +326,12 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
       return out;
     });
 
+    setNewFileIds(prev => {
+        const next = new Set(prev);
+        next.add(newFile.id);
+        return next;
+    });
+
     setIsCreatingFile(false);
     setNewFileName('');
     setOpenFileIds(prev => [...prev, newFile.id]);
@@ -408,7 +427,7 @@ export function IdeWorkspace({ project, onBack, onExport, onProjectUpdate }: Ide
       termInstance.current.writeln(`\x1b[32m➜\x1b[0m \x1b[34m~/project\x1b[0m $ ${cmd}`);
     }
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'ws://ec2-13-203-158-119.ap-south-1.compute.amazonaws.com:8080';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'ws://localhost:8080';
     const ws = new WebSocket(backendUrl);
     wsRef.current = ws;
 
