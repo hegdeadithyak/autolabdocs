@@ -52,12 +52,24 @@ jobs:
           docker info || echo "Docker daemon not reachable"
           echo "========================"
 
-          # Force remove old image to ensure fresh pull
-          docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:latest || true
+          # 🧹 AGGRESSIVE CLEANUP - FREE UP DISK SPACE
+          echo "=== Disk Usage Before Cleanup ==="
+          df -h
           
-          # Pull the latest images
+          echo "Cleaning up Docker system..."
+          # Remove all unused containers, networks, images (both dangling and unreferenced)
+          docker system prune -af
+          docker volume prune -f
+          
+          echo "Cleaning up apt cache..."
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          
+          echo "=== Disk Usage After Cleanup ==="
+          df -h
+
+          # Pull the latest images AND the specific version
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-runner:latest
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:${{ github.sha }}
           
           echo "New Backend Image ID:"
           docker image inspect ${{ secrets.DOCKERHUB_USERNAME }}/backend-runner:${{ github.sha }} --format '{{.Id}}'
