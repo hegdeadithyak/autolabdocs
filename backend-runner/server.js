@@ -9,10 +9,36 @@ const { spawnSync, exec } = require('child_process');
 // Force deploy trigger
 const wss = new WebSocket.Server({ port: 8080 });
 
+// --- CONCURRENCY CONTROL ---
+const MAX_CONCURRENT_CONTAINERS = parseInt(process.env.MAX_CONCURRENT || '5', 10);
+let activeContainers = 0;
+const queue = [];
+
+function updateQueuePositions() {
+    queue.forEach((item, index) => {
+        if (item.ws.readyState === WebSocket.OPEN) {
+            item.ws.send(JSON.stringify({
+                type: 'status',
+                data: `Queued (Position: ${index + 1})`
+            }));
+        }
+    });
+}
+
+function processQueue() {
+    if (activeContainers >= MAX_CONCURRENT_CONTAINERS || queue.length === 0) return;
+
+    const next = queue.shift();
+    updateQueuePositions(); // Notify others they moved up
+    
+    // Start the next job
+    startContainer(next.ws, next.sessionId, next.sessionDir, next.code, next.filename);
+}
+
 // Diagnostic: Check Docker availability
 try {
     console.log('--- Startup Diagnostics ---');
-    console.log('VERSION: 2026-01-02-FIX-PATHS-V2');
+    console.log('VERSION: 2026-01-02-QUEUE-V1');
     const dockerVersion = spawnSync('docker', ['--version']);
     if (dockerVersion.error) {
         console.error('Failed to find docker binary:', dockerVersion.error);
@@ -26,6 +52,7 @@ try {
     } else {
         console.log('Docker images accessible:\n', dockerImages.stdout.toString());
     }
+    console.log(`Max Concurrent: ${MAX_CONCURRENT_CONTAINERS}`);
     console.log('---------------------------');
 } catch (e) {
     console.error('Diagnostic check failed:', e);
@@ -50,7 +77,14 @@ wss.on('connection', (ws) => {
         const data = JSON.parse(message);
 
         if (data.type === 'init') {
-            ptyProcess = await handleInit(ws, sessionId, sessionDir, data.code, data.filename);
+            // --- QUEUE LOGIC ---
+            if (activeContainers >= MAX_CONCURRENT_CONTAINERS) {
+                console.log(`[${sessionId}] Queued. Active: ${activeContainers}/${MAX_CONCURRENT_CONTAINERS}`);
+                queue.push({ ws, sessionId, sessionDir, code: data.code, filename: data.filename });
+                ws.send(JSON.stringify({ type: 'status', data: `Server busy. Queued (Position: ${queue.length})` }));
+            } else {
+                startContainer(ws, sessionId, sessionDir, data.code, data.filename).then(p => ptyProcess = p);
+            }
         } else if (data.type === 'input' && ptyProcess) {
             ptyProcess.write(data.data);
         } else if (data.type === 'resize' && ptyProcess) {
@@ -59,9 +93,32 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
+        // If user disconnects while in queue, remove them
+        const queueIndex = queue.findIndex(item => item.sessionId === sessionId);
+        if (queueIndex !== -1) {
+            queue.splice(queueIndex, 1);
+            updateQueuePositions();
+            console.log(`[${sessionId}] Removed from queue (Disconnect)`);
+        }
         cleanup(sessionId, sessionDir, ptyProcess);
     });
 });
+
+// Refactored "start" logic into a separate function
+async function startContainer(ws, sessionId, sessionDir, code, filename = 'main.py') {
+    activeContainers++;
+    console.log(`[${sessionId}] Starting. Active: ${activeContainers}/${MAX_CONCURRENT_CONTAINERS}`);
+    
+    try {
+        const ptyProcess = await handleInit(ws, sessionId, sessionDir, code, filename);
+        return ptyProcess;
+    } catch (err) {
+        // Handle init failure by releasing slot
+        activeContainers--;
+        processQueue();
+        return null;
+    }
+}
 
 async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py') {
     try {
@@ -150,6 +207,7 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
                 ws.send(JSON.stringify({ type: 'exit', code: res.exitCode }));
                 ws.close();
             }
+            // Logic handled in cleanup
         });
 
         return ptyProcess;
@@ -158,7 +216,8 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         console.error(`[${sessionId}] Error:`, err);
         ws.send(JSON.stringify({ type: 'error', data: 'Failed to start execution: ' + err.message }));
         ws.close();
-        cleanup(sessionId, sessionDir, null); // Ensure cleanup on init failure
+        // Don't call cleanup here, it's called by the close handler
+        return null;
     }
 }
 
@@ -178,6 +237,25 @@ function cleanup(sessionId, dir, process) {
         fs.rmSync(dir, { recursive: true, force: true });
     } catch (e) {
         console.error(`[${sessionId}] Failed to clean dir:`, e.message);
+    }
+
+    // --- QUEUE LOGIC ---
+    // Only decrement if this session was actually active (not just queued and quit)
+    // We check this by ensuring it wasn't in the queue (handled in ws.close)
+    // But since cleanup is called on close, we need to be careful.
+    // Simplified: We decrement activeContainers whenever a RUNNING container finishes.
+    
+    // A robust way: `activeContainers` is only incremented in `startContainer`.
+    // We need to know if *this* session was a started container.
+    // The easiest way is to decrement blindly *if* we know it started. 
+    // BUT `cleanup` is called for everyone. 
+    
+    // BETTER FIX: Check if we are "releasing" a slot.
+    // We'll rely on a flag or check if the process existed.
+    if (process) { 
+        activeContainers--;
+        if (activeContainers < 0) activeContainers = 0;
+        processQueue(); // Start next
     }
 }
 
