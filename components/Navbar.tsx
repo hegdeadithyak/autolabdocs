@@ -147,18 +147,22 @@ export const Navbar: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={() => router.push("/signin")}
-                    className="hidden sm:block px-3 py-1.5 text-[13px] text-zinc-400 hover:text-white transition-colors"
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    onClick={() => router.push("/signin")}
-                    className="px-3.5 py-1.5 bg-white text-[#0c0c0c] rounded-lg text-[13px] font-medium hover:bg-zinc-200 transition-colors"
-                  >
-                    Get started
-                  </button>
+                  {pathname !== "/signin" && (
+                    <button
+                      onClick={() => router.push("/signin")}
+                      className="hidden sm:block px-3 py-1.5 text-[13px] text-zinc-400 hover:text-white transition-colors"
+                    >
+                      Sign in
+                    </button>
+                  )}
+                  {pathname !== "/signup" && (
+                    <button
+                      onClick={() => router.push("/signup")}
+                      className="px-3.5 py-1.5 bg-white text-[#0c0c0c] rounded-lg text-[13px] font-medium hover:bg-zinc-200 transition-colors"
+                    >
+                      Get started
+                    </button>
+                  )}
                 </>
               )}
 
