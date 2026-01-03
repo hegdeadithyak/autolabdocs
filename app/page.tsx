@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../components/AuthProvider';
 import { Dashboard } from '../components/Dashboard';
-import { LandingHero } from '../components/LandingHero';
+import { UnifiedLandingPage } from '../components/UnifiedLandingPage';
 import SineWaveLoading from '../components/SineWaveLoading';
 import { Project, ProjectType, ParsedCell } from '../types';
 import { api } from '../lib/api';
@@ -93,7 +93,7 @@ export default function Page() {
             onLogout={logout}
           />
         ) : (
-          <LandingHero onStart={() => router.push('/signup')} />
+          <UnifiedLandingPage />
         )}
       </main>
     </>

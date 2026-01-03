@@ -1,243 +1,306 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Project, ProjectType, AuthState } from "../types";
-import { api } from "../lib/api";
-import { CreateProjectModal } from "./CreateProjectModal";
-import { Plus, Trash2, FolderOpen, Code, Cloud, Search } from "lucide-react";
-// import SineWaveLoading from "./SineWaveLoading"; // Removed: Loading now managed by App.tsx
+"use client"
+
+import type React from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
+import { type Project, ProjectType, type AuthState } from "../types"
+import { api } from "../lib/api"
+import { CreateProjectModal } from "./CreateProjectModal"
+import { motion, AnimatePresence } from "framer-motion"
+import { Plus, Trash2, Code, FileCode2, Search, Clock, ArrowUpRight, Command, Folder } from "lucide-react"
 
 type Props = {
-  user: AuthState["user"];
-  onOpenProject: (p: Project) => void; // This is now the handler with minimum loading
-  onLogout: () => void;
-};
+  user: AuthState["user"]
+  onOpenProject: (p: Project) => void
+  onLogout: () => void
+}
 
 export function Dashboard({ user, onOpenProject, onLogout }: Props) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  // const [isLoadingProject, setIsLoadingProject] = useState(false); // Removed: Loading now managed by App.tsx
+  const [projects, setProjects] = useState<Project[]>([])
+  const [showCreate, setShowCreate] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    let mounted = true;
+    let mounted = true
     const load = async () => {
-      setLoading(true);
+      setLoading(true)
       try {
-        const data = await api.getProjects();
-        if (mounted) setProjects(data || []);
+        const data = await api.getProjects()
+        if (mounted) setProjects(data || [])
       } catch (err) {
-        console.error("Failed to load projects", err);
-        if (mounted) setProjects([]);
+        console.error("Failed to load projects", err)
+        if (mounted) setProjects([])
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) setLoading(false)
       }
-    };
-    load();
+    }
+    load()
     return () => {
-      mounted = false;
-    };
-  }, [showCreate]);
+      mounted = false
+    }
+  }, [showCreate])
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault()
+        setShowCreate(true)
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.min(prev + 1, filteredProjects.length - 1))
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.max(prev - 1, -1))
+      }
+      if (e.key === "Enter" && selectedIndex >= 0) {
+        e.preventDefault()
+        onOpenProject(filteredProjects[selectedIndex])
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [selectedIndex, onOpenProject])
 
   const handleCreate = async (name: string, type: ProjectType) => {
-    const p = await api.createProject(name, type);
-    setShowCreate(false);
-    onOpenProject(p);
-  };
+    const p = await api.createProject(name, type)
+    setShowCreate(false)
+    onOpenProject(p)
+  }
 
-  const handleDelete = async (id: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    if (!confirm("Delete project? This cannot be undone.")) return;
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm("Delete this project?")) return
     try {
-      await api.deleteProject(id);
-      setProjects((prev) => prev.filter((x) => x.id !== id));
+      await api.deleteProject(id)
+      setProjects((prev) => prev.filter((x) => x.id !== id))
     } catch (err) {
-      console.error("Failed to delete project", err);
+      console.error("Failed to delete project", err)
     }
-  };
-
-  const handleProjectClick = (p: Project) => {
-    // setIsLoadingProject(true); // Removed: Loading now managed by App.tsx
-    onOpenProject(p); // Call the prop which now handles the loading overlay
-  };
+  }
 
   const filteredProjects = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter((p) => p.name.toLowerCase().includes(q));
-  }, [projects, searchQuery]);
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return projects
+    return projects.filter((p) => p.name.toLowerCase().includes(q))
+  }, [projects, searchQuery])
+
+  const formatDate = (date: string | Date) => {
+    const d = new Date(date)
+    const now = new Date()
+    const diff = now.getTime() - d.getTime()
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+    if (days === 0) return "Today"
+    if (days === 1) return "Yesterday"
+    if (days < 7) return `${days}d ago`
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#070707] text-white">
-      {/* {isLoadingProject && <SineWaveLoading />} Removed: Loading now managed by App.tsx */}
-      <div className="absolute inset-0 bg-grid opacity-6 pointer-events-none" />
+    <div
+      className="min-h-screen bg-[#0c0c0c] text-white antialiased selection:bg-blue-500/20"
+      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, sans-serif' }}
+    >
+      <AnimatePresence>
+        {showCreate && <CreateProjectModal onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
+      </AnimatePresence>
 
-      {showCreate && (
-        <CreateProjectModal onClose={() => setShowCreate(false)} onCreate={handleCreate} />
-      )}
-
-      <div className="relative max-w-7xl mx-auto px-6 pt-24 pb-20">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 pb-20">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Projects</h1>
-            <p className="text-zinc-400 mt-1">Organize notebooks & source code — black, minimal, refined.</p>
-          </div>
-
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:flex-none md:w-72">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search projects..."
-                className="w-full bg-zinc-900/40 border border-zinc-800 rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-white/20 focus:bg-zinc-900 transition"
-              />
+        <motion.header
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+          className="mb-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-[-0.02em] text-white">Projects</h1>
+              <p className="text-[13px] text-zinc-500 mt-1">
+                {projects.length} {projects.length === 1 ? "project" : "projects"}
+              </p>
             </div>
 
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 bg-white text-black px-4 py-2 rounded-xl text-sm font-semibold shadow-md hover:scale-[0.98] active:scale-95 transition transform"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white text-[#0c0c0c] rounded-lg text-[13px] font-medium hover:bg-zinc-200 transition-colors"
             >
-              <Plus size={16} />
-              New Project
-            </button>
-
-            <button
-              onClick={onLogout}
-              className="hidden md:inline-flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-white/5 text-zinc-300 hover:bg-white/2 transition"
-              title="Logout"
-            >
-              Logout
+              <Plus size={14} strokeWidth={2} />
+              <span className="hidden sm:inline">New project</span>
+              <div className="hidden sm:flex items-center gap-0.5 ml-1 text-[10px] text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded">
+                <Command size={9} />
+                <span>N</span>
+              </div>
             </button>
           </div>
-        </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {/* Search */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" />
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setSelectedIndex(-1)
+              }}
+              placeholder="Search projects..."
+              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-9 pr-20 py-2.5 text-[13px] text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15] focus:bg-white/[0.05] transition-colors"
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.04] rounded border border-white/[0.06]">
+              <Command size={10} className="text-zinc-600" />
+              <span className="text-[10px] text-zinc-600">K</span>
+            </div>
+          </div>
+        </motion.header>
+
+        {/* Content */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1, duration: 0.4 }}>
+          {/* Loading */}
           {loading && (
-            <div className="col-span-full py-20 flex items-center justify-center text-zinc-500">Loading projects...</div>
+            <div className="py-20 flex flex-col items-center">
+              <div className="w-5 h-5 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+              <p className="text-[13px] text-zinc-600 mt-3">Loading...</p>
+            </div>
           )}
 
+          {/* Empty State */}
           {!loading && projects.length === 0 && !searchQuery && (
-            <div className="col-span-full py-28 border border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center text-zinc-400 bg-white/2">
-              <div className="w-14 h-14 rounded-full bg-zinc-900 flex items-center justify-center mb-4 border border-white/5">
-                <FolderOpen size={22} className="opacity-60" />
+            <div className="py-20 flex flex-col items-center">
+              <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-4">
+                <Folder size={20} className="text-zinc-600" />
               </div>
-              <p className="font-medium text-zinc-300">No projects yet</p>
-              <p className="text-sm text-zinc-500 mt-2">Create notebooks or source-code projects — they’ll appear here.</p>
+              <h3 className="text-[15px] font-medium text-white mb-1">No projects yet</h3>
+              <p className="text-[13px] text-zinc-500 mb-6">Create your first project to get started</p>
               <button
                 onClick={() => setShowCreate(true)}
-                className="mt-4 text-sm px-3 py-2 rounded-lg bg-white/5 hover:bg-white/6"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg text-[13px] font-medium hover:bg-blue-400 transition-colors"
               >
-                Create your first project
+                <Plus size={14} />
+                Create project
               </button>
             </div>
           )}
 
+          {/* No Results */}
           {!loading && filteredProjects.length === 0 && searchQuery && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-zinc-500">
-              <Search size={28} className="opacity-20 mb-2" />
-              <p className="text-sm">No results for "{searchQuery}"</p>
+            <div className="py-20 flex flex-col items-center">
+              <Search size={20} className="text-zinc-700 mb-3" />
+              <p className="text-[13px] text-zinc-500">No results for "{searchQuery}"</p>
+              <button
+                onClick={() => setSearchQuery("")}
+                className="mt-3 text-[13px] text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                Clear search
+              </button>
             </div>
           )}
 
-          {filteredProjects.map((p, idx) => (
-            <article
-              key={p.id}
-              onClick={() => handleProjectClick(p)}
-              className="group relative cursor-pointer overflow-hidden transform transition-all duration-500 ease-out hover:-translate-y-2 hover:scale-[1.02]"
-              style={{ transitionDelay: `${idx * 40}ms` }}
-            >
-              {/* Glassmorphic card with glow */}
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-xl border border-white/10 group-hover:border-white/20 transition-all duration-500" />
-              
-              {/* Animated glow effect */}
-              <div
-                className={`absolute -inset-[1px] rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-xl ${
-                  p.type === ProjectType.COLAB
-                    ? "bg-gradient-to-br from-blue-500/20 via-cyan-500/10 to-transparent"
-                    : "bg-gradient-to-br from-purple-500/20 via-pink-500/10 to-transparent"
-                }`}
-              />
-
-              {/* Inner glow orb */}
-              <div
-                className={`absolute -right-12 -top-12 w-32 h-32 rounded-full blur-3xl opacity-0 group-hover:opacity-30 transition-all duration-700 ${
-                  p.type === ProjectType.COLAB ? "bg-blue-400" : "bg-purple-400"
-                }`}
-              />
-
-              {/* Card content */}
-              <div className="relative z-10 p-6 h-full flex flex-col backdrop-blur-sm">
-                {/* Header with floating icon */}
-                <div className="flex items-center justify-between mb-5">
+          {/* Projects List */}
+          {filteredProjects.length > 0 && (
+            <div className="space-y-1">
+              {filteredProjects.map((project, idx) => (
+                <motion.div
+                  key={project.id}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.02, duration: 0.3 }}
+                  onClick={() => onOpenProject(project)}
+                  onMouseEnter={() => setSelectedIndex(idx)}
+                  className={`group relative flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer transition-colors ${
+                    selectedIndex === idx ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+                  }`}
+                >
+                  {/* Icon */}
                   <div
-                    className={`relative flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 ${
-                      p.type === ProjectType.COLAB
-                        ? "bg-gradient-to-br from-blue-500/20 to-cyan-500/10 border border-blue-400/30 text-blue-300 shadow-lg shadow-blue-500/20"
-                        : "bg-gradient-to-br from-purple-500/20 to-pink-500/10 border border-purple-400/30 text-purple-300 shadow-lg shadow-purple-500/20"
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      project.type === ProjectType.COLAB
+                        ? "bg-orange-500/10 text-orange-400"
+                        : "bg-blue-500/10 text-blue-400"
                     }`}
                   >
-                    {/* Icon glow */}
-                    <div
-                      className={`absolute inset-0 rounded-xl blur-md opacity-0 group-hover:opacity-60 transition-opacity duration-500 ${
-                        p.type === ProjectType.COLAB ? "bg-blue-400/40" : "bg-purple-400/40"
-                      }`}
-                    />
-                    {p.type === ProjectType.COLAB ? <Cloud size={20} className="relative z-10" /> : <Code size={20} className="relative z-10" />}
+                    {project.type === ProjectType.COLAB ? <FileCode2 size={16} /> : <Code size={16} />}
                   </div>
 
-                  <button
-                    onClick={(e) => handleDelete(p.id, e)}
-                    className="text-zinc-400 hover:text-red-400 p-2 rounded-xl hover:bg-red-500/10 backdrop-blur-sm border border-transparent hover:border-red-500/20 transition-all duration-300 opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0"
-                    title="Delete project"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[14px] font-medium text-white truncate">{project.name}</h3>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide ${
+                          project.type === ProjectType.COLAB
+                            ? "bg-orange-500/10 text-orange-400"
+                            : "bg-blue-500/10 text-blue-400"
+                        }`}
+                      >
+                        {project.type === ProjectType.COLAB ? "Notebook" : "Code"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="text-[12px] text-zinc-600">{project.filesCount || 0} files</span>
+                      <span className="text-[12px] text-zinc-700 flex items-center gap-1">
+                        <Clock size={10} />
 
-                {/* Project info with smooth reveal */}
-                <div className="mb-4 space-y-3">
-                  <h3 className="text-lg font-semibold text-white truncate transition-all duration-300 group-hover:text-white/90">
-                    {p.name}
-                  </h3>
-                  
-                  <div
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider backdrop-blur-md transition-all duration-500 group-hover:scale-105 ${
-                      p.type === ProjectType.COLAB
-                        ? "bg-blue-500/15 text-blue-200 border border-blue-400/30 shadow-sm shadow-blue-500/10"
-                        : "bg-purple-500/15 text-purple-200 border border-purple-400/30 shadow-sm shadow-purple-500/10"
-                    }`}
-                  >
-                    <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                      p.type === ProjectType.COLAB ? "bg-blue-400" : "bg-purple-400"
-                    }`} />
-                    {p.type === ProjectType.COLAB ? "Notebook" : "Source Code"}
+                        {formatDate(project.createdAt)}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Bottom info with glass separator */}
-                <div className="mt-auto pt-4 border-t border-white/10 backdrop-blur-sm">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-400 font-medium flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-zinc-400" />
-                      {p.filesCount ? `${p.filesCount} files` : "Empty"}
-                    </span>
-                    <span className="text-zinc-500">{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => handleDelete(project.id, e)}
+                      className="p-1.5 rounded-md text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <ArrowUpRight size={14} className="text-zinc-600 mr-1" />
                   </div>
-                </div>
-              </div>
 
-              {/* Shimmer effect on hover */}
-              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
-              
-              {/* Edge highlight */}
-              <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 group-hover:ring-white/20 transition-all duration-500 pointer-events-none" />
-            </article>
-          ))}
-        </div>
+                  {/* Selection indicator */}
+                  {selectedIndex === idx && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-500 rounded-r" />
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Footer hint */}
+        {filteredProjects.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="mt-8 pt-6 border-t border-white/[0.04] flex items-center justify-center gap-4 text-[11px] text-zinc-700"
+          >
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 bg-white/[0.04] rounded border border-white/[0.06]">↑↓</kbd>
+              navigate
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 bg-white/[0.04] rounded border border-white/[0.06]">↵</kbd>
+              open
+            </span>
+            <span className="flex items-center gap-1">
+              <kbd className="px-1 py-0.5 bg-white/[0.04] rounded border border-white/[0.06] flex items-center gap-0.5">
+                <Command size={8} />N
+              </kbd>
+              new
+            </span>
+          </motion.div>
+        )}
       </div>
     </div>
-  );
+  )
 }

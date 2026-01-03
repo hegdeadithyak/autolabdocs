@@ -7,7 +7,8 @@ import { api } from '../../../lib/api';
 import { Project, ProjectType } from '../../../types';
 import { ColabWorkspace } from '../../../components/ColabWorkspace';
 import SineWaveLoading from '../../../components/SineWaveLoading';
-import { PreviewModal } from '../../../components/PreviewModal';
+import { PreviewModal, PreviewFile } from '../../../components/PreviewModal';
+import { generateWordDocument } from '../../../components/exportService';
 import { useAuth } from '../../../components/AuthProvider';
 
 const IdeWorkspace = dynamic(
@@ -52,36 +53,41 @@ export default function WorkspacePage() {
     router.push('/');
   };
 
+  const ideFiles: PreviewFile[] = project.files?.map(f => ({
+    name: f.name,
+    content: f.content,
+    type: 'code',
+    lastOutput: f.lastOutput
+  })) || [];
+
   return (
     <>
       {project.type === ProjectType.COLAB ? (
         <ColabWorkspace
           project={project}
           onBack={handleBack}
-          onPreview={() => setShowPreview(true)}
           onProjectUpdate={setProject}
+          api={{ updateProject: api.updateProject }}
         />
       ) : (
         <div className="h-screen overflow-hidden bg-[#1e1e1e] pt-[60px] md:pt-0"> 
-          {/* Note: In original app, IdeWorkspace was wrapped in h-screen overflow-hidden.
-              We might need to adjust for Navbar height if Navbar is sticky/fixed or takes up space.
-              Navbar in layout is normal block flow. 
-              Ideally IdeWorkspace should take remaining height.
-          */}
            <div className="h-[calc(100vh-64px)]">
             <IdeWorkspace
                 project={project}
                 onBack={handleBack}
                 onExport={() => setShowPreview(true)}
                 onProjectUpdate={setProject}
+                api={{ updateProject: api.updateProject, updateFile: api.updateFile }}
             />
            </div>
         </div>
       )}
       {showPreview && (
         <PreviewModal
-          project={project}
+          title={project.name}
+          files={ideFiles}
           onClose={() => setShowPreview(false)}
+          onDownload={() => generateWordDocument(project)}
         />
       )}
     </>

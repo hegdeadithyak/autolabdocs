@@ -15,7 +15,9 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   password  String
+  coins     Int       @default(0)
   projects  Project[]
+  bugReports BugReport[]
 }
 
 model Project {
@@ -56,4 +58,23 @@ enum IdeLanguage {
   C
   CPP
   PYTHON
+}
+
+model BugReport {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  description String    @db.Text
+  screenshot  String?   @db.Text
+  status      BugStatus @default(OPEN)
+  adminReply  String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+enum BugStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }

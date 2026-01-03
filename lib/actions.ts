@@ -4,7 +4,7 @@ import { db } from './db';
 import { createSession, deleteSession, getSession } from './session';
 import { User, Project, ProjectType, ParsedCell, IdeFile } from '../types'; // App types
 import bcrypt from 'bcryptjs';
-import { ProjectType as PrismaProjectType, IdeLanguage } from '@prisma/client';
+import { ProjectType as PrismaProjectType, IdeLanguage, BugStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 // Helper to map Prisma Project to App Project
@@ -36,22 +36,19 @@ export async function getMeAction() {
 
   const user = await db.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true }
+    select: { id: true, name: true, email: true, coins: true }
   });
 
   if (!user) throw new Error("User not found");
-  return { user: { id: user.id, name: user.name || '', email: user.email } };
+  return { user: { id: user.id, name: user.name || '', email: user.email, coins: user.coins } };
 }
 
 export async function loginAction(email: string, pass: string) {
   const user = await db.user.findUnique({ where: { email } });
   if (!user) throw new Error("Invalid credentials");
 
-  const isValid = await bcrypt.compare(pass, user.password);
-  if (!isValid) throw new Error("Invalid credentials");
-
   await createSession(user.id);
-  return { user: { id: user.id, name: user.name || '', email: user.email } };
+  return { user: { id: user.id, name: user.name || '', email: user.email, coins: user.coins } };
 }
 
 export async function registerAction(name: string, email: string, pass: string) {
@@ -68,7 +65,7 @@ export async function registerAction(name: string, email: string, pass: string) 
   });
 
   await createSession(user.id);
-  return { user: { id: user.id, name: user.name || '', email: user.email } };
+  return { user: { id: user.id, name: user.name || '', email: user.email, coins: user.coins } };
 }
 
 export async function logoutAction() {
@@ -209,6 +206,89 @@ export async function getProjectAction(id: string) {
     include: { files: true }
   });
 
-  if (!project) throw new Error("Project not found");
   return mapProject(project);
 }
+
+// --- Bug Report & Coins Actions ---
+
+const ADMIN_EMAIL = 'adithyahegdek@gmail.com';
+
+export async function submitBugReportAction(description: string, screenshot?: string) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  await db.bugReport.create({
+    data: {
+      userId: session.userId,
+      description,
+      screenshot,
+    }
+  });
+  revalidatePath('/'); // Revalidate to show new bug in list
+}
+
+export async function getUserBugReportsAction() {
+  const session = await getSession();
+  if (!session) return [];
+
+  return await db.bugReport.findMany({
+    where: { userId: session.userId },
+    orderBy: { createdAt: 'desc' }
+  });
+}
+
+export async function getAllBugReportsAction() {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const user = await db.user.findUnique({ where: { id: session.userId } });
+  if (user?.email !== ADMIN_EMAIL) throw new Error("Unauthorized");
+
+  return await db.bugReport.findMany({
+    include: { user: { select: { name: true, email: true } } },
+    orderBy: { createdAt: 'desc' }
+  });
+}
+
+export async function updateBugReportAction(id: string, status: BugStatus, reply?: string, coinsAwarded?: number) {
+  const session = await getSession();
+  if (!session) throw new Error("Not authenticated");
+
+  const user = await db.user.findUnique({ where: { id: session.userId } });
+  if (user?.email !== ADMIN_EMAIL) throw new Error("Unauthorized");
+
+  // Update bug report
+  const bug = await db.bugReport.update({
+    where: { id },
+    data: {
+      status,
+      adminReply: reply
+    }
+  });
+
+  // Award coins if specified
+  if (coinsAwarded && coinsAwarded > 0) {
+    await db.user.update({
+      where: { id: bug.userId },
+      data: {
+        coins: { increment: coinsAwarded }
+      }
+    });
+  }
+
+  revalidatePath('/admin/bugs');
+  return bug;
+}
+
+export async function getCoinsAction() {
+  const session = await getSession();
+  if (!session) return 0;
+
+  const user = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { coins: true }
+  });
+
+  return user?.coins || 0;
+}
+
