@@ -45,6 +45,7 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        command_timeout: 30m
         script: |
           echo "=== Environment Debug ==="
           which docker || echo "Docker not in PATH"
