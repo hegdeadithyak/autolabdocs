@@ -73,6 +73,7 @@ export default function WorkspacePage() {
         <div className="h-screen overflow-hidden bg-[#1e1e1e] pt-[60px] md:pt-0"> 
            <div className="h-[calc(100vh-64px)]">
             <IdeWorkspace
+                key={project.id}
                 project={project}
                 onBack={handleBack}
                 onExport={() => setShowPreview(true)}

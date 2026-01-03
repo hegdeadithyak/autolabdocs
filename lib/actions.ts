@@ -175,26 +175,38 @@ export async function updateProjectAction(project: Project) {
         include: { files: true }
     });
 
-    // 2. If project.files is present, we sync them (Upsert)
+    // 2. If project.files is present, we sync them (Upsert replacement)
     // For scaling to 100k, we shouldn't do this often, 
     // but we keep it for compatibility with the current full-sync UI.
     if (project.files) {
         for (const file of project.files) {
-            await tx.ideFile.upsert({
-                where: { id: file.id },
-                create: {
-                    id: file.id,
-                    name: file.name,
-                    content: file.content || '',
-                    projectId: project.id,
-                    isExecuted: file.isExecuted || false
-                },
-                update: {
-                    name: file.name,
-                    content: file.content,
-                    isExecuted: file.isExecuted
+            const existing = await tx.ideFile.findUnique({ where: { id: file.id } });
+
+            if (existing) {
+                // Security Check: Ensure file belongs to the project we are updating
+                if (existing.projectId !== project.id) {
+                    throw new Error(`Security Violation: File ${file.name} (${file.id}) belongs to another project.`);
                 }
-            });
+
+                await tx.ideFile.update({
+                    where: { id: file.id },
+                    data: {
+                        name: file.name,
+                        content: file.content,
+                        isExecuted: file.isExecuted
+                    }
+                });
+            } else {
+                await tx.ideFile.create({
+                    data: {
+                        id: file.id,
+                        name: file.name,
+                        content: file.content || '',
+                        projectId: project.id,
+                        isExecuted: file.isExecuted || false
+                    }
+                });
+            }
         }
         
         // Refresh with latest files
