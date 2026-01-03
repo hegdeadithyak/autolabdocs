@@ -410,21 +410,20 @@ export function IdeWorkspace({
         alert("Failed to delete file");
         return;
       }
+      
       //@ts-ignore
+      const remaining = files.filter((f) => f.id !== id);
+      
+      //@ts-ignore
+      setFiles(remaining);
+      onProjectUpdate({ ...project, files: remaining });
 
-      setFiles((prev) => {
-        //@ts-ignore
-
-        const remaining = prev.filter((f) => f.id !== id);
-        onProjectUpdate({ ...project, files: remaining });
-        return remaining;
-      });
       setOpenFileIds((prev) => prev.filter((fid) => fid !== id));
       //@ts-ignore
 
       setActiveFileId((prev) => (prev === id ? "" : prev));
     },
-    [onProjectUpdate, project, api, newFileIds]
+    [onProjectUpdate, project, api, newFileIds, files]
   );
 
   const handleEditorChange = useCallback(
@@ -991,13 +990,11 @@ export function IdeWorkspace({
                               <Check size={10} className="text-emerald-400" />
                             </div>
                           )}
-                          {files.length > 1 && (
                             <Trash2
                               size={14}
                               className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all p-0.5"
                               onClick={(e) => handleDeleteFile(file.id, e)}
                             />
-                          )}
                         </div>
                       </div>
                     ))}
