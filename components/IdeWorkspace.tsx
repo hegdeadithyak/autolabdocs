@@ -488,7 +488,7 @@ export function IdeWorkspace({
 
       const backendUrl =
         process.env.NEXT_PUBLIC_BACKEND_URL ||
-        "ws://ec2-13-203-158-119.ap-south-1.compute.amazonaws.com:8080";
+        "wss://ws.autolabdocs.online";
       const ws = new WebSocket(backendUrl);
       //@ts-ignore
 
