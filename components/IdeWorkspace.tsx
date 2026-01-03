@@ -935,7 +935,7 @@ export function IdeWorkspace({
                             if (e.key === "Escape") setIsCreatingFile(false);
                           }}
                           className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600"
-                          style={{ fontFamily: '"JetBrains Mono", monospace' }}
+                          style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif' }}
                           placeholder="filename.py"
                         />
                       </div>
@@ -966,7 +966,7 @@ export function IdeWorkspace({
                         <span
                           className="flex-1 truncate"
                           style={{
-                            fontFamily: '"JetBrains Mono", monospace',
+                            fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif',
                             fontSize: "13px",
                             letterSpacing: "0.2px",
                           }}
@@ -1032,7 +1032,7 @@ export function IdeWorkspace({
                     <FileIcon filename={file.name} size={16} />
                     <span
                       className="text-zinc-400"
-                      style={{ fontFamily: '"JetBrains Mono", monospace' }}
+                      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif' }}
                     >
                       {file.name}
                     </span>
@@ -1089,7 +1089,7 @@ export function IdeWorkspace({
                   <span
                     className="truncate flex-1"
                     style={{
-                      fontFamily: '"JetBrains Mono", monospace',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif',
                       fontSize: "12px",
                     }}
                   >

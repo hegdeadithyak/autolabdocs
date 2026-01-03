@@ -5,6 +5,8 @@ import React, { useState, useEffect } from 'react';
 import { Bug, X, Upload, History, MessageSquare, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { submitBugReportAction, getUserBugReportsAction } from '../lib/actions';
 import { BugStatus } from '@prisma/client';
+import { useAuth } from './AuthProvider';
+import { useRouter } from 'next/navigation';
 
 type Tab = 'report' | 'history';
 
@@ -25,12 +27,25 @@ export const BugReportButton: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [myReports, setMyReports] = useState<BugReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
+  
+  const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (isOpen && activeTab === 'history') {
       fetchReports();
     }
   }, [isOpen, activeTab]);
+
+  const handleOpen = () => {
+    if (!user) {
+      if (confirm("You need to sign in to report a bug. Go to sign in page?")) {
+        router.push('/signin');
+      }
+      return;
+    }
+    setIsOpen(true);
+  };
 
   const fetchReports = async () => {
     setLoadingReports(true);
@@ -104,7 +119,7 @@ export const BugReportButton: React.FC = () => {
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={handleOpen}
         className="fixed bottom-6 left-6 z-50 flex items-center gap-2 px-4 py-2 bg-zinc-800/80 hover:bg-zinc-700/80 backdrop-blur-md border border-white/10 rounded-full text-sm font-medium text-zinc-300 transition-all shadow-lg hover:shadow-xl hover:scale-105"
       >
         <Bug size={16} />
