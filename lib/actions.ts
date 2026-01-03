@@ -139,6 +139,19 @@ export async function updateFileAction(fileId: string, data: Partial<IdeFile>) {
     return updated;
 }
 
+export async function deleteFileAction(fileId: string) {
+    const session = await getSession();
+    if (!session) throw new Error("Not authenticated");
+
+    // Verify ownership and delete
+    await db.ideFile.delete({
+        where: {
+            id: fileId,
+            project: { userId: session.userId }
+        }
+    });
+}
+
 export async function updateProjectAction(project: Project) {
   const session = await getSession();
   if (!session) throw new Error("Not authenticated");

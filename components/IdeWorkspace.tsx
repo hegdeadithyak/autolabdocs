@@ -62,6 +62,7 @@ interface IdeWorkspaceProps {
   api: {
     updateProject: (p: Project) => Promise<void>;
     updateFile: (id: string, data: Partial<IdeFile>) => Promise<void>;
+    deleteFile: (id: string) => Promise<void>;
   };
 }
 //@ts-ignore
@@ -396,9 +397,19 @@ export function IdeWorkspace({
   const handleDeleteFile = useCallback(
     //@ts-ignore
 
-    (id, e) => {
+    async (id, e) => {
       e?.stopPropagation();
       if (!confirm("Delete this file?")) return;
+
+      try {
+        if (!newFileIds.has(id)) {
+             await api.deleteFile(id);
+        }
+      } catch (err) {
+        console.error("Failed to delete file", err);
+        alert("Failed to delete file");
+        return;
+      }
       //@ts-ignore
 
       setFiles((prev) => {
@@ -413,7 +424,7 @@ export function IdeWorkspace({
 
       setActiveFileId((prev) => (prev === id ? "" : prev));
     },
-    [onProjectUpdate, project]
+    [onProjectUpdate, project, api, newFileIds]
   );
 
   const handleEditorChange = useCallback(
@@ -483,7 +494,6 @@ export function IdeWorkspace({
 
       setTerminalOutput((prev) => [
         ...prev,
-        `\x1b[38;5;39m➜\x1b[0m \x1b[38;5;75m~/project\x1b[0m $ ${cmd}`,
       ]);
 
       const backendUrl =

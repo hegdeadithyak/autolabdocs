@@ -10,6 +10,7 @@ import {
   updateProjectAction,
   getProjectAction,
   updateFileAction,
+  deleteFileAction,
 } from './actions';
 
 export const api = {
@@ -39,6 +40,9 @@ export const api = {
   },
   updateFile: async (fileId: string, data: Partial<IdeFile>): Promise<void> => {
     await updateFileAction(fileId, data);
+  },
+  deleteFile: async (fileId: string): Promise<void> => {
+    await deleteFileAction(fileId);
   },
   getProject: async (id: string): Promise<Project> => {
     return await getProjectAction(id);

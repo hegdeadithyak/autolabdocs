@@ -136,13 +136,13 @@ async function handleInit(ws, sessionId, sessionDir, code, filename = 'main.py')
         
         if (ext === '.py') {
             // Debugging: List files to confirm copy success, then run
-            runCommand = ['sh', '-c', `ls -laR /code; python3 -u "/code/${filename}"`];
+            runCommand = ['sh', '-c', `python3 -u "/code/${filename}"`];
         } else if (ext === '.js') {
             runCommand = ['node', `/code/${filename}`];
         } else if (ext === '.cpp') {
             // For C++, we compile then run. We need a shell for this.
             // Added ls -la for debugging "No such file" errors
-            runCommand = ['sh', '-c', `ls -la /code && g++ /code/${filename} -o /code/a.out && /code/a.out`];
+            runCommand = ['sh', '-c', `g++ /code/${filename} -o /code/a.out && /code/a.out`];
         } else {
             // Default or plaintext
              runCommand = ['cat', `/code/${filename}`];

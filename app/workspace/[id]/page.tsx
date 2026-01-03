@@ -77,7 +77,7 @@ export default function WorkspacePage() {
                 onBack={handleBack}
                 onExport={() => setShowPreview(true)}
                 onProjectUpdate={setProject}
-                api={{ updateProject: api.updateProject, updateFile: api.updateFile }}
+                api={{ updateProject: api.updateProject, updateFile: api.updateFile, deleteFile: api.deleteFile }}
             />
            </div>
         </div>
