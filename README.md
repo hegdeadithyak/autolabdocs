@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AutoLabDocs ⚡
 
-## Getting Started
+![AutoLabDocs Banner](https://placehold.co/1200x400/050505/3b82f6?text=AUTOLABDOCS&font=montserrat)
 
-First, run the development server:
+> **Stop wasting your life on Microsoft Word.**
+> Paste code. Get a perfect PDF. Pass the lab.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Look, nobody became an engineer to drag-and-drop screenshots into a Word doc at 3 AM. **AutoLabDocs** is the tool that ends that misery. I built this because I was tired of the busywork, and now it's here to save your weekends too.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+It's not just a "formatter"—it's a full-blown execution engine that runs your code, captures the output (even the graphs), and hands you a submission-ready PDF before you can finish your coffee.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Why This Rules
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+-   **Native Execution, No BS**: We don't just "highlight" your code. We *run* it. Python, C, C++, Node.js—it all executes in a real, isolated environment.
+-   **PDFs That Look Better Than Yours**: Syntax highlighting? Check. Vector graphs? Check. Formatting that makes TAs weep with joy? Double check.
+-   **VSCode in the Browser**: The IDE experience you know and love, right there in the web app. No learning curve.
+-   **Bulletproof Security**: Every single line of code runs in a locked-down Docker container. It’s safer than your grandma’s PC.
+-   **Traffic? What Traffic?**: Our custom queue system handles load like a champ. 100 students trying to submit at 11:59 PM? No problem.
 
-## Learn More
+## 🛠️ The Stack (Heavy Hitters Only)
 
-To learn more about Next.js, take a look at the following resources:
+We didn't cut corners. We built this with the best tools available.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Frontend
+-   **Next.js 16 (React 19)**: Bleeding edge. Fast as hell.
+-   **Tailwind CSS v4**: Because writing CSS files is so 2015.
+-   **Monaco Editor**: The engine behind VSCode. If it's good enough for Microsoft, it's good enough for us.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Backend & The "Secret Sauce"
+-   **Custom Runner Service**: A Node.js beast using `node-pty` to stream real terminal outputs via WebSockets. It's real-time, it's raw, and it's beautiful.
+-   **Docker Isolation**: Custom-built `python-runner` images that spin up in milliseconds and vanish just as fast.
+-   **PostgreSQL + Prisma**: Rock-solid data storage.
+-   **JWT Auth**: Secure, stateless, and scalable.
 
-## Deploy on Vercel
+## 🧠 Engineering Flex (How We Handle Edge Cases)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This isn't a hackathon toy. It's built to survive the real world.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1.  **"Nice Try, Hackers"**: You can't break out. Containers run with `--network none` (no internet access), restricted CPUs, and capped memory. You run your logic, not a crypto miner.
+2.  **The Queue**: We implemented a smart FIFO semaphore system. If the server is full, you don't crash it—you get a ticket. We process jobs orderly, ensuring 100% uptime.
+3.  **Garbage Collection**: We clean up after ourselves. Ephemeral containers and temp files are nuked instantly after execution. The server stays lean and mean.
+
+## 💻 Run It Yourself
+
+Want to see how the sausage is made? Here is how you spin it up locally.
+
+### Prerequisites
+-   Node.js (v18+)
+-   Docker (Running)
+-   Postgres
+
+### Setup
+
+1.  **Clone it.**
+    ```bash
+    git clone https://github.com/yourusername/autolabdocs.git
+    cd autolabdocs
+    ```
+
+2.  **Install the goods.**
+    ```bash
+    npm install
+    cd backend-runner && npm install && cd ..
+    ```
+
+3.  **Config.**
+    Create a `.env` file. You know the drill.
+    ```env
+    DATABASE_URL="postgresql://user:pass@localhost:5432/autolabdocs"
+    SESSION_SECRET="mash-your-keyboard-here-to-make-it-secure"
+    ```
+
+4.  **Database.**
+    ```bash
+    npx prisma db push
+    ```
+
+5.  **Build the Runner.**
+    *Crucial Step.* You need the engine image.
+    ```bash
+    cd backend-runner
+    docker build -t python-runner:latest .
+    cd ..
+    ```
+
+6.  **Launch.**
+    Terminal 1 (Frontend):
+    ```bash
+    npm run dev
+    ```
+    Terminal 2 (The Muscle):
+    ```bash
+    cd backend-runner
+    node server.js
+    ```
+
+---
+
+**Built by Adithya Hegde Kota.**
+
+I solve my problems. Then I generalize them so you can solve yours. I am leveling up, getting sharper, and building faster every single day.
+
+**Open for opportunities.** If you want a builder who actually ships high-leverage work, let's talk.
