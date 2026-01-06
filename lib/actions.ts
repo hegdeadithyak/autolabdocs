@@ -236,7 +236,7 @@ export async function getProjectAction(id: string) {
 
 // --- Bug Report & Coins Actions ---
 
-const ADMIN_EMAIL = 'adithyahegdek@gmail.com';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
 export async function submitBugReportAction(description: string, screenshot?: string) {
   const session = await getSession();

@@ -2,8 +2,12 @@ import 'server-only';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const secretKey = process.env.SESSION_SECRET || 'default-secret-key-change-me';
-const encodedKey = new TextEncoder().encode(secretKey);
+const secretKey = process.env.SESSION_SECRET;
+if (!secretKey && process.env.NODE_ENV === 'production') {
+  throw new Error('SESSION_SECRET is not set');
+}
+const finalKey = secretKey || 'default-secret-key-change-me';
+const encodedKey = new TextEncoder().encode(finalKey);
 
 type SessionPayload = {
   userId: string;

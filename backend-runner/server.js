@@ -7,7 +7,8 @@ const os = require('os');
 const { spawnSync, exec } = require('child_process');
 
 // Force deploy trigger
-const wss = new WebSocket.Server({ port: 8080 });
+const PORT = process.env.PORT || 8080;
+const wss = new WebSocket.Server({ port: PORT });
 
 // --- CONCURRENCY CONTROL ---
 const MAX_CONCURRENT_CONTAINERS = parseInt(process.env.MAX_CONCURRENT || '200', 10);
@@ -259,4 +260,4 @@ function cleanup(sessionId, dir, process) {
     }
 }
 
-console.log('Runner Service listening on port 8080');
+console.log(`Runner Service listening on port ${PORT}`);
