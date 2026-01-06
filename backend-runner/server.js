@@ -10,7 +10,7 @@ const { spawnSync, exec } = require('child_process');
 const wss = new WebSocket.Server({ port: 8080 });
 
 // --- CONCURRENCY CONTROL ---
-const MAX_CONCURRENT_CONTAINERS = parseInt(process.env.MAX_CONCURRENT || '5', 10);
+const MAX_CONCURRENT_CONTAINERS = parseInt(process.env.MAX_CONCURRENT || '200', 10);
 let activeContainers = 0;
 const queue = [];
 
