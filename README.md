@@ -5,7 +5,7 @@
 > **Stop wasting your life on Microsoft Word.**
 > Paste code. Get a perfect PDF. Pass the lab.
 
-Look, nobody became an engineer to drag-and-drop screenshots into a Word doc at 3 AM. **AutoLabDocs** is the tool that ends that misery. I built this because I was tired of the busywork, and now it's here to save your weekends too.
+I built this because I was tired of the busywork, and now it's here to save your weekends too.
 
 It's not just a "formatter"—it's a full-blown execution engine that runs your code, captures the output (even the graphs), and hands you a submission-ready PDF before you can finish your coffee.
 
