@@ -12,42 +12,41 @@
 #
 #   public/runtime/clang/
 #     clang-runtime.mjs   <- ES-module adapter implementing load()/build()/run()
+#                            (hand-written, tracked in git — NOT fetched here)
 #     clang.wasm          <- clang frontend
 #     lld.wasm            <- wasm-ld linker
+#     memfs.wasm          <- in-memory filesystem + WASI shim used by the adapter
 #     sysroot.tar         <- libc / libc++ headers + archives (memfs image)
 #
 # The adapter contract is documented in lib/runtime/cpp/worker.ts.
 #
-# Set RUNTIME_BASE_URL to a mirror that hosts these artifacts, e.g. an
-# internal bucket or a pinned release of the upstream toolchain
-# (https://github.com/binji/wasm-clang is the reference implementation).
+# By default the four binaries are pulled from the upstream reference toolchain
+# (https://github.com/binji/wasm-clang). Override RUNTIME_BASE_URL to fetch from
+# a mirror you control, e.g. an internal bucket or a pinned release.
 
 set -euo pipefail
 
 DEST="$(cd "$(dirname "$0")/.." && pwd)/public/runtime/clang"
 mkdir -p "$DEST"
 
-if [[ -z "${RUNTIME_BASE_URL:-}" ]]; then
-  cat <<'EOF'
-[fetch-runtimes] RUNTIME_BASE_URL is not set.
+# Default mirror: the upstream wasm-clang demo host. Its files are named without
+# a .wasm extension, so map each source name -> destination name below.
+BASE="${RUNTIME_BASE_URL:-https://binji.github.io/wasm-clang}"
 
-The C/C++ engine needs a clang-in-WASM toolchain hosted somewhere you control.
-Point RUNTIME_BASE_URL at a location serving these files and re-run:
+# "<source-name> <dest-name>" pairs.
+ASSETS=(
+  "clang clang.wasm"
+  "lld lld.wasm"
+  "memfs memfs.wasm"
+  "sysroot.tar sysroot.tar"
+)
 
-    clang-runtime.mjs  clang.wasm  lld.wasm  sysroot.tar
-
-Example:
-    RUNTIME_BASE_URL=https://assets.example.com/clang bash scripts/fetch-runtimes.sh
-
-Reference toolchain: https://github.com/binji/wasm-clang
-(JavaScript and Python need no assets — they work without running this script.)
-EOF
-  exit 1
-fi
-
-for f in clang-runtime.mjs clang.wasm lld.wasm sysroot.tar; do
-  echo "[fetch-runtimes] downloading $f"
-  curl -fSL "${RUNTIME_BASE_URL%/}/$f" -o "$DEST/$f"
+for pair in "${ASSETS[@]}"; do
+  src="${pair%% *}"
+  dst="${pair##* }"
+  echo "[fetch-runtimes] downloading $dst"
+  curl -fSL "${BASE%/}/$src" -o "$DEST/$dst"
 done
 
 echo "[fetch-runtimes] toolchain installed in $DEST"
+echo "[fetch-runtimes] (clang-runtime.mjs is tracked in git and left untouched)"
