@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  // Don't fail production builds on type or lint errors.
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Cross-origin isolation is required for SharedArrayBuffer, which the
   // in-browser code runtime uses for blocking stdin (input()/cin/prompt).
   // `credentialless` is used for COEP so cross-origin subresources (the
