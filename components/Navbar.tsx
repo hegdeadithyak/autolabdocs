@@ -59,6 +59,7 @@ export const Navbar: React.FC = () => {
               {[
                 { label: "Features", href: "/#features" },
                 { label: "How it works", href: "/how" },
+                { label: "Docs", href: "/docs" },
                 { label: "Pricing", href: "/how#pricing" },
               ].map((item) => (
                 <a

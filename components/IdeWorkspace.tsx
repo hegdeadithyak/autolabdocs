@@ -35,7 +35,14 @@ import {
   Send,
   CornerDownLeft,
   Maximize2,
+  Square,
 } from "lucide-react";
+import {
+  getRunnerForFile,
+  languageForFile,
+  type RunEvent,
+  type Runner,
+} from "../lib/runtime";
 
 // Types
 interface IdeFile {
@@ -198,7 +205,8 @@ export function IdeWorkspace({
   const editorRef = useRef(null);
   const currentOutputBuffer = useRef("");
   const currentInputBuffer = useRef("");
-  const wsRef = useRef(null);
+  const currentErrorBuffer = useRef("");
+  const runnerRef = useRef<Runner | null>(null);
   const terminalRef = useRef(null);
   const saveFileRef = useRef(() => Promise.resolve());
   const terminalInputRef = useRef(null);
@@ -459,156 +467,104 @@ export function IdeWorkspace({
     } catch {}
   };
 
-  // Run / WebSocket - now with stdin support
+  // Run the active file entirely in the browser (no server). Each language is
+  // executed by a Web Worker engine that emits the same event protocol the
+  // terminal already understands.
   const handleRun = useCallback(
     async (isExportRun = false) => {
-      //@ts-ignore
-
       const activeFile = files.find((f) => f.id === activeFileId);
       if (!activeFile) return;
       if (isRunning) return;
+
+      const language = languageForFile(activeFile.name);
+      if (!language) {
+        setTerminalOutput((prev) => [
+          ...prev,
+          `\nNo browser runtime for "${activeFile.name}". Supported: .js, .py, .c, .cpp\n`,
+        ]);
+        if (isExportRun) setExportStatus("verifying");
+        return;
+      }
 
       setIsRunning(true);
       setAwaitingInput(false);
       currentOutputBuffer.current = "";
       currentInputBuffer.current = "";
+      currentErrorBuffer.current = "";
 
-      // close previous ws
-      if (wsRef.current) {
+      // tear down any previous runner
+      if (runnerRef.current) {
         try {
-          //@ts-ignore
-
-          wsRef.current.close();
+          runnerRef.current.stop();
         } catch {}
-        wsRef.current = null;
+        runnerRef.current = null;
       }
 
-      const ext = activeFile.name.split(".").pop()?.toLowerCase();
-      let cmd = `./${activeFile.name}`;
-      if (ext === "py") cmd = `python ${activeFile.name}`;
-      else if (ext === "js") cmd = `node ${activeFile.name}`;
-      else if (ext === "ts") cmd = `ts-node ${activeFile.name}`;
-      else if (ext === "c") cmd = `gcc ${activeFile.name} -o main && ./main`;
-      else if (ext === "cpp") cmd = `g++ ${activeFile.name} -o main && ./main`;
-
-      setTerminalOutput((prev) => [
-        ...prev,
-      ]);
-
-      const backendUrl =
-        process.env.NEXT_PUBLIC_BACKEND_URL ||
-        "wss://ws.autolabdocs.online";
-      const ws = new WebSocket(backendUrl);
-      //@ts-ignore
-
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        ws.send(
-          JSON.stringify({
-            type: "init",
-            code: activeFile.content,
-            filename: activeFile.name,
-          })
+      const finishRun = () => {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === activeFileId
+              ? {
+                  ...f,
+                  isExecuted: true,
+                  lastOutput: currentOutputBuffer.current,
+                  lastInput: currentInputBuffer.current,
+                  lastError: currentErrorBuffer.current || undefined,
+                }
+              : f
+          )
         );
+        setIsRunning(false);
+        setAwaitingInput(false);
+        runnerRef.current = null;
+        if (isExportRun) setExportStatus("verifying");
       };
 
-      ws.onmessage = (event) => {
-        let msg;
-        try {
-          msg = JSON.parse(event.data);
-        } catch {
-          msg = { type: "output", data: String(event.data) };
-        }
-
-        // Normal output chunk
+      const onEvent = (msg: RunEvent) => {
         if (msg.type === "output") {
           currentOutputBuffer.current += msg.data;
           setTerminalOutput((prev) => [...prev, msg.data]);
-        }
-        // Runner requests input from user
-        else if (
-          msg.type === "input_request" ||
-          msg.type === "stdin" ||
-          msg.type === "request_input" ||
-          msg.type === "prompt"
-        ) {
-          // Add prompt text if available
-          if (msg.prompt) {
-            setTerminalOutput((prev) => [...prev, msg.prompt]);
-          } else {
-            setTerminalOutput((prev) => [...prev, "Input required: "]);
-          }
+        } else if (msg.type === "input_request") {
+          if (msg.prompt) setTerminalOutput((prev) => [...prev, msg.prompt]);
           setAwaitingInput(true);
-          // focus input
-          //@ts-ignore
-
           setTimeout(() => terminalInputRef.current?.focus(), 80);
-        }
-        // process exit
-        else if (msg.type === "exit") {
-          setTerminalOutput((prev) => [
-            ...prev,
-            `\nProcess exited with code ${msg.code}`,
-          ]);
-          //@ts-ignore
-
-          setFiles((prev) =>
-            //@ts-ignore
-
-            prev.map((f) =>
-              f.id === activeFileId
-                ? {
-                    ...f,
-                    isExecuted: true,
-                    lastOutput: currentOutputBuffer.current,
-                    lastInput: currentInputBuffer.current,
-                  }
-                : f
-            )
-          );
-          setIsRunning(false);
-          setAwaitingInput(false);
-          try {
-            ws.close();
-          } catch {}
-          if (isExportRun) setExportStatus("verifying");
-        }
-        // error
-        else if (msg.type === "error") {
-          setTerminalOutput((prev) => [...prev, `\nError: ${msg.data}`]);
-          setIsRunning(false);
-          setAwaitingInput(false);
-          if (isExportRun) setExportStatus("verifying");
-        }
-        // fallback - unknown typed message, treat as output
-        else {
-          if (typeof msg === "string") {
-            currentOutputBuffer.current += msg;
-            setTerminalOutput((prev) => [...prev, msg]);
-          } else if (msg.data) {
-            currentOutputBuffer.current += msg.data;
-            setTerminalOutput((prev) => [...prev, msg.data]);
-          }
+        } else if (msg.type === "error") {
+          currentErrorBuffer.current += msg.data;
+          setTerminalOutput((prev) => [...prev, `\n${msg.data}\n`]);
+        } else if (msg.type === "exit") {
+          finishRun();
         }
       };
 
-      ws.onclose = () => {
-        setIsRunning(false);
-        setAwaitingInput(false);
-      };
-
-      ws.onerror = () => {
+      try {
+        const runner = getRunnerForFile(activeFile.name);
+        runnerRef.current = runner;
+        await runner.run({
+          code: activeFile.content,
+          filename: activeFile.name,
+          onEvent,
+        });
+      } catch (err) {
         setTerminalOutput((prev) => [
           ...prev,
-          "\nFailed to connect to runner service.",
+          `\nFailed to start runtime: ${String(err)}\n`,
         ]);
-        setIsRunning(false);
-        setAwaitingInput(false);
-      };
+        finishRun();
+      }
     },
     [activeFileId, files, isRunning]
   );
+
+  // Stop a running program (kills its worker — works even on infinite loops).
+  const handleStop = useCallback(() => {
+    if (runnerRef.current) {
+      try {
+        runnerRef.current.stop();
+      } catch {}
+    }
+    setIsRunning(false);
+    setAwaitingInput(false);
+  }, []);
 
   //@ts-ignore
   const sendTerminalInput = useCallback(
@@ -618,10 +574,10 @@ export function IdeWorkspace({
       const value = inputText !== undefined ? inputText : terminalInput;
       //@ts-ignore
 
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (!runnerRef.current) {
         setTerminalOutput((prev) => [
           ...prev,
-          `\nCan't send input: runner not connected.`,
+          `\nCan't send input: nothing is running.`,
         ]);
         setTerminalInput("");
         setAwaitingInput(false);
@@ -629,11 +585,7 @@ export function IdeWorkspace({
       }
       currentInputBuffer.current += value + "\n";
       try {
-        //@ts-ignore
-
-        wsRef.current.send(
-          JSON.stringify({ type: "input", data: value + "\n" })
-        );
+        runnerRef.current.sendInput(value + "\n");
       } catch (err) {
         console.error("Failed to send input", err);
         setTerminalOutput((prev) => [
@@ -821,23 +773,41 @@ export function IdeWorkspace({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => handleRun(false)}
-            disabled={isRunning || exportStatus !== "idle"}
-            className="group relative flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Run"
-          >
-            {/* Glow */}
-            <div className="absolute inset-0 rounded-lg bg-blue-500/50 blur-lg opacity-50 group-hover:opacity-70 transition-opacity" />
-            <span className="relative flex items-center gap-2">
-              <Play
-                size={14}
-                fill="currentColor"
-                className="group-hover:scale-110 transition-transform"
-              />
-              Run
-            </span>
-          </button>
+          {isRunning ? (
+            <button
+              onClick={handleStop}
+              className="group relative flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-all"
+              title="Stop"
+            >
+              <div className="absolute inset-0 rounded-lg bg-red-500/50 blur-lg opacity-50 group-hover:opacity-70 transition-opacity" />
+              <span className="relative flex items-center gap-2">
+                <Square
+                  size={14}
+                  fill="currentColor"
+                  className="group-hover:scale-110 transition-transform"
+                />
+                Stop
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleRun(false)}
+              disabled={exportStatus !== "idle"}
+              className="group relative flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Run"
+            >
+              {/* Glow */}
+              <div className="absolute inset-0 rounded-lg bg-blue-500/50 blur-lg opacity-50 group-hover:opacity-70 transition-opacity" />
+              <span className="relative flex items-center gap-2">
+                <Play
+                  size={14}
+                  fill="currentColor"
+                  className="group-hover:scale-110 transition-transform"
+                />
+                Run
+              </span>
+            </button>
+          )}
           <button
             onClick={handleStartExport}
             disabled={exportStatus !== "idle"}

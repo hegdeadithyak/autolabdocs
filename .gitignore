@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# in-browser C/C++ toolchain assets (fetched via scripts/fetch-runtimes.sh)
+/public/runtime/clang
